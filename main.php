@@ -1,9 +1,33 @@
 <?php
 
-const SLACK_TOKEN      = '';
-const SLACK_CHANNEL    = '#worldcup';
-const SLACK_BOT_NAME   = 'WorldCup Bot';
-const SLACK_BOT_AVATAR = 'http://i.imgur.com/LWw0Yoo.png';
+function env($key, $default)
+{
+	$result = $default;
+	if (file_exists(__DIR__ . "/.env"))
+	{
+		$content = file_get_contents(__DIR__ . "/.env");
+		$lines = explode("\n", $content);
+		foreach($lines as $line)
+		{
+			$values = explode('=', $line);
+			if ($values > 1)
+			{
+				if ($key == trim($values[0]))
+				{
+					$result = trim(implode("=", array_slice($values, 1)));
+				}
+			}
+		}
+	}
+	
+	return $result;
+}
+
+define('SLACK_TOKEN', env('SLACK_TOKEN', ''));
+define('SLACK_CHANNEL', '#worldcup');
+define('SLACK_BOT_NAME', 'WorldCup Bot');
+define('SLACK_BOT_AVATAR', 'http://i.imgur.com/LWw0Yoo.png');
+define('TIME_ALERT', env('TIME_ALERT', 5));
 
 function postToSlack($text, $attachments_text = '')
 {
@@ -24,10 +48,6 @@ function postToSlack($text, $attachments_text = '')
   curl_close($ch);
 }
 
-postToSlack('hello form slack bot');
-
-$TIME_ALERT = 5;
-
 $data = json_decode(file_get_contents("https://api.fifa.com/api/v1/calendar/matches?idCompetition=17&idSeason=254645&idStage=275073&language=fr-FR&count=500"));
 
 $current_date = (new DateTime())->getTimestamp();
@@ -43,20 +63,20 @@ else
 	$dbMatches = json_decode(file_get_contents($dbPath));
 }
 
-$messages = [];
 foreach ($data->Results as $match)
 {
 	$date = (new DateTime($match->Date))->getTimestamp();
 	$idMatch = $match->IdMatch;
 	
-	if (!in_array($idMatch, $dbMatches) && ($date - $current_date) > 0 && ($date - $current_date) <= (60 * $TIME_ALERT))
+	if (!in_array($idMatch, $dbMatches) && ($date - $current_date) > 0 && ($date - $current_date) <= (60 * TIME_ALERT))
 	{
 		$team1 = $match->Home->TeamName[0]->Description;
 		$team2 = $match->Away->TeamName[0]->Description;
 		if ($match->StageName[0]->Description == "Phase de groupes")
 		{
 			$group_name = $match->GroupName[0]->Description;
-			$messages[] = "le match du $group_name : $team1 - $team2 commence.";
+            $message = "le match du $group_name : $team1 - $team2 commence.";
+			postToSlack($message);
 		}
 
 		$dbMatches[] = $idMatch;
@@ -66,5 +86,6 @@ foreach ($data->Results as $match)
 $fp = fopen($dbPath, "w+");
 fwrite($fp, json_encode($dbMatches)); 
 fclose($fp);
+
 
 ?>
